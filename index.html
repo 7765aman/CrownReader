@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CrownReader - Digital Crown Book Reader</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👑</text></svg>">
+  
+  <!-- Google Fonts: Merriweather for reading, Inter for UI, JetBrains Mono for monospace -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Merriweather:ital,wght@0,300;0,400;0,700;1,300;1,400&display=swap" rel="stylesheet">
+  
+  <!-- PDF.js CDN for PDF parsing -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <!-- JSZip CDN for EPUB archive parsing -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body data-theme="dark">
+
+  <!-- TOP NAVIGATION BAR -->
+  <header class="navbar" id="navbar">
+    <div class="nav-left">
+      <button class="nav-brand-btn" id="navBrandBtn" title="Crown Reader Home">
+        <span class="crown-icon">👑</span>
+        <span class="brand-title">Crown<span class="brand-accent">Reader</span></span>
+      </button>
+      <div class="reader-meta" id="readerNavMeta" style="display: none;">
+        <span class="meta-divider">/</span>
+        <span class="book-title-display" id="navBookTitle" title="Current Book">Book Title</span>
+        <span class="meta-badge" id="navProgressBadge">0%</span>
+      </div>
+    </div>
+
+    <div class="nav-right">
+      <button class="nav-btn" id="libraryBackBtn" style="display: none;" title="Back to Library (Esc)">
+        <span class="btn-icon">📚</span>
+        <span class="btn-label">Library</span>
+      </button>
+      <button class="nav-btn" id="shortcutsBtn" title="Keyboard Shortcuts">
+        <span class="btn-icon">⌨️</span>
+      </button>
+      <button class="nav-btn" id="settingsBtn" title="Reader Settings (S)">
+        <span class="btn-icon">⚙️</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- APP CONTAINER -->
+  <main class="main-container">
+
+    <!-- ========================================== -->
+    <!-- 1. LIBRARY VIEW -->
+    <!-- ========================================== -->
+    <section class="view-section" id="libraryView">
+      <div class="library-container">
+        
+        <div class="library-hero">
+          <div class="hero-crown-badge">👑 Digital Crown Experience</div>
+          <h1 class="hero-title">Your Book Library</h1>
+          <p class="hero-subtitle">Upload any book or document. Experience reading paragraph-by-paragraph with the fluid precision of a digital crown.</p>
+        </div>
+
+        <!-- UPLOAD DROP ZONE -->
+        <div class="upload-dropzone" id="dropZone">
+          <input type="file" id="fileInput" accept=".txt,.epub,.pdf" class="file-input-hidden" />
+          <div class="dropzone-content">
+            <div class="dropzone-icon-ring">
+              <span class="dropzone-icon">📥</span>
+            </div>
+            <h3 class="dropzone-title">Drop your book here or <span class="browse-link">browse</span></h3>
+            <p class="dropzone-subtext">Supports <strong>.txt</strong>, <strong>.epub</strong>, and <strong>.pdf</strong> files</p>
+            <div class="format-chips">
+              <span class="format-chip">TXT Text Files</span>
+              <span class="format-chip">EPUB eBooks</span>
+              <span class="format-chip">PDF Documents</span>
+            </div>
+          </div>
+          <div class="dropzone-loading" id="dropzoneLoading" style="display: none;">
+            <div class="spinner"></div>
+            <p id="parsingStatusText">Parsing book paragraphs...</p>
+          </div>
+        </div>
+
+        <!-- BOOKS SECTION -->
+        <div class="books-section">
+          <div class="section-header">
+            <h2 class="section-title">Saved Books <span class="books-count" id="booksCountBadge">(0)</span></h2>
+            <div class="section-actions">
+              <button class="btn-secondary" id="addSampleBooksBtn" title="Add Classic Sample Books">
+                <span>✨ Load Sample Books</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="books-grid" id="booksGrid">
+            <!-- Book cards will be dynamically injected here -->
+          </div>
+
+          <!-- Empty Library Placeholder -->
+          <div class="library-empty" id="libraryEmpty" style="display: none;">
+            <div class="empty-icon">📖</div>
+            <h3>Your library is empty</h3>
+            <p>Drag and drop a book above or click "Load Sample Books" to start reading immediately.</p>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- 2. READER VIEW -->
+    <!-- ========================================== -->
+    <section class="view-section" id="readerView" style="display: none;">
+      <div class="reader-container">
+
+        <!-- Progress Tracker Bar -->
+        <div class="progress-bar-container" title="Reading Progress">
+          <div class="progress-bar-fill" id="readingProgressBar"></div>
+        </div>
+
+        <!-- TOP HALF: 3-PANEL VERTICAL CAROUSEL -->
+        <div class="carousel-section" id="carouselSection">
+          
+          <div class="carousel-header">
+            <div class="crown-wheel-label">
+              <span class="crown-icon-small">👑</span>
+              <span>DIGITAL CROWN CAROUSEL</span>
+            </div>
+            <div class="paragraph-counter" id="paragraphCounter">
+              Paragraph <span id="currentParaNum">1</span> of <span id="totalParaNum">1</span>
+            </div>
+          </div>
+
+          <!-- Carousel Stage Area -->
+          <div class="carousel-stage-wrapper">
+
+            <!-- The Carousel Stage containing virtual animated slots -->
+            <div class="carousel-stage" id="carouselStage">
+              
+              <!-- Off-screen Top (buffer for upward scroll) -->
+              <div class="crown-panel panel-buffer" id="slotOffTop" aria-hidden="true">
+                <div class="panel-header">
+                  <span class="panel-tag">OFF TOP</span>
+                </div>
+                <div class="panel-preview-text">...</div>
+              </div>
+
+              <!-- TOP PANEL: PREVIOUS -->
+              <div class="crown-panel panel-previous" id="slotTop" role="button" tabindex="0" title="Click to scroll to previous">
+                <div class="panel-header">
+                  <span class="panel-tag tag-prev">PREVIOUS</span>
+                  <span class="panel-indicator">▲</span>
+                </div>
+                <div class="panel-preview-text" id="prevPreviewText">At the beginning of the book.</div>
+              </div>
+
+              <!-- MIDDLE PANEL: ACTIVE CURRENT -->
+              <div class="crown-panel panel-active" id="slotMiddle" role="region" aria-live="polite">
+                <div class="panel-header">
+                  <span class="panel-tag tag-active">★ READING</span>
+                  <span class="panel-status-dot"></span>
+                </div>
+                <div class="panel-preview-text" id="currPreviewText">Loading paragraph preview...</div>
+              </div>
+
+              <!-- BOTTOM PANEL: NEXT -->
+              <div class="crown-panel panel-next" id="slotBottom" role="button" tabindex="0" title="Click to scroll to next">
+                <div class="panel-header">
+                  <span class="panel-tag tag-next">NEXT</span>
+                  <span class="panel-indicator">▼</span>
+                </div>
+                <div class="panel-preview-text" id="nextPreviewText">At the end of the book.</div>
+              </div>
+
+              <!-- Off-screen Bottom (buffer for downward scroll) -->
+              <div class="crown-panel panel-buffer" id="slotOffBottom" aria-hidden="true">
+                <div class="panel-header">
+                  <span class="panel-tag">OFF BOTTOM</span>
+                </div>
+                <div class="panel-preview-text">...</div>
+              </div>
+
+            </div>
+
+            <!-- Carousel Navigation Buttons -->
+            <div class="carousel-nav-controls" id="carouselNavControls">
+              <button class="nav-control-btn" id="crownArrowUp" title="Previous Paragraph (Arrow Up)" aria-label="Previous Paragraph">▲</button>
+              <button class="nav-control-btn" id="crownArrowDown" title="Next Paragraph (Arrow Down)" aria-label="Next Paragraph">▼</button>
+            </div>
+
+          </div>
+
+          <div class="carousel-hint">
+            <span>Scroll wheel over carousel, swipe, or use <kbd>↑</kbd> <kbd>↓</kbd> / <kbd>Space</kbd></span>
+          </div>
+
+        </div>
+
+        <!-- DIVIDER GRADIENT LINE -->
+        <div class="reading-divider">
+          <div class="divider-line"></div>
+          <div class="divider-badge">
+            <span>📄 FULL PARAGRAPH</span>
+          </div>
+          <div class="divider-line"></div>
+        </div>
+
+        <!-- BOTTOM HALF: FULL PARAGRAPH DISPLAY -->
+        <div class="full-paragraph-section" id="fullParagraphSection">
+          <div class="full-paragraph-card" id="fullParagraphCard">
+            <div class="full-paragraph-text" id="fullParagraphText">
+              <!-- Full paragraph text rendered here with drop cap -->
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ========================================== -->
+  <!-- 3. SETTINGS MODAL -->
+  <!-- ========================================== -->
+  <div class="modal-overlay" id="settingsModal" style="display: none;">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+      
+      <div class="modal-header">
+        <h3 class="modal-title" id="settingsTitle">⚙️ Reader Settings</h3>
+        <button class="modal-close-btn" id="closeSettingsBtn" title="Close Settings">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        
+        <!-- Theme Selection -->
+        <div class="setting-group">
+          <label class="setting-label">Theme</label>
+          <div class="theme-options">
+            <button class="theme-btn" data-theme-val="dark" id="themeBtnDark">
+              <span class="theme-swatch dark-swatch"></span>
+              <span class="theme-name">🌙 Dark</span>
+            </button>
+            <button class="theme-btn" data-theme-val="light" id="themeBtnLight">
+              <span class="theme-swatch light-swatch"></span>
+              <span class="theme-name">☀️ Light</span>
+            </button>
+            <button class="theme-btn" data-theme-val="sepia" id="themeBtnSepia">
+              <span class="theme-swatch sepia-swatch"></span>
+              <span class="theme-name">📜 Sepia</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Font Family Selection -->
+        <div class="setting-group">
+          <label class="setting-label">Reading Font</label>
+          <div class="font-options">
+            <button class="font-btn" data-font-val="serif" id="fontBtnSerif">
+              <span class="font-preview" style="font-family: 'Merriweather', Georgia, serif;">Ag</span>
+              <span>Serif</span>
+              <small>Merriweather</small>
+            </button>
+            <button class="font-btn" data-font-val="sans" id="fontBtnSans">
+              <span class="font-preview" style="font-family: 'Inter', sans-serif;">Ag</span>
+              <span>Sans-serif</span>
+              <small>Inter</small>
+            </button>
+            <button class="font-btn" data-font-val="mono" id="fontBtnMono">
+              <span class="font-preview" style="font-family: 'JetBrains Mono', monospace;">Ag</span>
+              <span>Monospace</span>
+              <small>JetBrains</small>
+            </button>
+          </div>
+        </div>
+
+        <!-- Font Size Slider -->
+        <div class="setting-group">
+          <div class="setting-label-row">
+            <label class="setting-label" for="fontSizeSlider">Font Size</label>
+            <span class="setting-val-display" id="fontSizeDisplay">18px</span>
+          </div>
+          <div class="slider-wrapper">
+            <span class="slider-min">12px</span>
+            <input type="range" id="fontSizeSlider" min="12" max="32" step="1" value="18" class="range-slider" />
+            <span class="slider-max">32px</span>
+          </div>
+        </div>
+
+        <!-- Line Height Slider -->
+        <div class="setting-group">
+          <div class="setting-label-row">
+            <label class="setting-label" for="lineHeightSlider">Line Spacing</label>
+            <span class="setting-val-display" id="lineHeightDisplay">1.8</span>
+          </div>
+          <div class="slider-wrapper">
+            <span class="slider-min">1.2</span>
+            <input type="range" id="lineHeightSlider" min="1.2" max="3.0" step="0.1" value="1.8" class="range-slider" />
+            <span class="slider-max">3.0</span>
+          </div>
+        </div>
+
+        <!-- Drop Cap Toggle & Audio Click Feedback -->
+        <div class="setting-group-split">
+          <div class="toggle-option">
+            <label class="toggle-label" for="dropCapToggle">
+              <span class="toggle-text">Drop Cap Effect</span>
+              <span class="toggle-subtext">Large decorative first letter</span>
+            </label>
+            <input type="checkbox" id="dropCapToggle" class="switch-input" checked />
+          </div>
+
+          <div class="toggle-option">
+            <label class="toggle-label" for="hapticSoundToggle">
+              <span class="toggle-text">Crown Haptic Click</span>
+              <span class="toggle-subtext">Subtle audio click feedback</span>
+            </label>
+            <input type="checkbox" id="hapticSoundToggle" class="switch-input" checked />
+          </div>
+        </div>
+
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-primary" id="saveCloseSettingsBtn">Done</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- 4. SHORTCUTS MODAL -->
+  <!-- ========================================== -->
+  <div class="modal-overlay" id="shortcutsModal" style="display: none;">
+    <div class="modal-card modal-small" role="dialog" aria-modal="true" aria-labelledby="shortcutsTitle">
+      <div class="modal-header">
+        <h3 class="modal-title" id="shortcutsTitle">⌨️ Keyboard Navigation</h3>
+        <button class="modal-close-btn" id="closeShortcutsBtn" title="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <ul class="shortcuts-list">
+          <li>
+            <span class="shortcut-keys"><kbd>↓</kbd> or <kbd>→</kbd> or <kbd>Space</kbd></span>
+            <span class="shortcut-desc">Next paragraph</span>
+          </li>
+          <li>
+            <span class="shortcut-keys"><kbd>↑</kbd> or <kbd>←</kbd></span>
+            <span class="shortcut-desc">Previous paragraph</span>
+          </li>
+          <li>
+            <span class="shortcut-keys"><kbd>Mouse Wheel</kbd></span>
+            <span class="shortcut-desc">Scroll over carousel to turn crown</span>
+          </li>
+          <li>
+            <span class="shortcut-keys"><kbd>Touch Swipe</kbd></span>
+            <span class="shortcut-desc">Swipe up / down on carousel</span>
+          </li>
+          <li>
+            <span class="shortcut-keys"><kbd>Esc</kbd></span>
+            <span class="shortcut-desc">Return to Library</span>
+          </li>
+          <li>
+            <span class="shortcut-keys"><kbd>S</kbd></span>
+            <span class="shortcut-desc">Toggle Reader Settings</span>
+          </li>
+        </ul>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-primary" id="closeShortcutsBtn2">Got It</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION CONTAINER -->
+  <div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
+
