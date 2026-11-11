@@ -355,6 +355,48 @@ html, body {
   border-radius: 12px;
 }
 
+.pdf-ocr-options {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin: -2rem 0 3rem;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.pdf-ocr-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.pdf-ocr-toggle input {
+  accent-color: var(--accent-color);
+}
+
+.pdf-ocr-language-label {
+  margin-left: 0.5rem;
+}
+
+.pdf-ocr-language {
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0.35rem 0.55rem;
+}
+
+.pdf-ocr-help {
+  flex-basis: 100%;
+  margin: 0;
+  text-align: center;
+  font-size: 0.78rem;
+}
+
 /* Loading State for Dropzone */
 .dropzone-loading {
   position: absolute;
