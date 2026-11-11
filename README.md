@@ -2,6 +2,8 @@
 
 CrownReader is a pure, browser-based web application that reimagines reading digital books paragraph-by-paragraph with the fluid precision and aesthetic of a smartwatch's **Digital Crown** carousel.
 
+**Live site:** [7765aman.github.io/CrownReader](https://7765aman.github.io/CrownReader/)
+
 ---
 
 ## 🚀 How to Run
@@ -25,6 +27,9 @@ No servers, build steps, or installations required. Simply open `index.html` in 
 - **Library View**:
   - Drag-and-drop or file browse upload zone.
   - Automatic parsing for `.txt`, `.epub`, and `.pdf` files.
+  - Scanned PDF pages are OCRed in the browser with Tesseract.js; choose English, Hindi, or both. Enable **OCR every PDF page** when a document has an incomplete text layer.
+  - PDF pages are rendered and OCRed in the browser. The engine and language data load from a CDN; the PDF itself is not uploaded to an OCR service.
+  - OCR can still miss or misread text, especially on low-quality scans, handwriting, or complex layouts. Compare OCR output with the original PDF for critical material.
   - Pre-loaded classic sample books (*The Time Machine*, *The Art of War*) ready to test immediately with 1 click.
   - Book grid cards with paragraph counts, reading percentage progress, and deletion controls.
 - **Reader Settings Modal**:
