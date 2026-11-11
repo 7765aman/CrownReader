@@ -67,6 +67,8 @@ const DOM = {
   // Library
   dropZone: document.getElementById('dropZone'),
   fileInput: document.getElementById('fileInput'),
+  forcePdfOcr: document.getElementById('forcePdfOcr'),
+  pdfOcrLanguage: document.getElementById('pdfOcrLanguage'),
   dropzoneLoading: document.getElementById('dropzoneLoading'),
   parsingStatusText: document.getElementById('parsingStatusText'),
   booksGrid: document.getElementById('booksGrid'),
@@ -358,7 +360,7 @@ function handleFileSelection(file) {
   } else if (ext === '.epub') {
     parseEpubFile(file);
   } else if (ext === '.pdf') {
-    parsePdfFile(file);
+    parsePdfFile(file, { forceOcr: DOM.forcePdfOcr.checked });
   } else {
     setDropzoneLoading(false);
     showToast('❌ Unsupported format. Please drop a .txt, .epub, or .pdf file.');
@@ -547,7 +549,7 @@ function parseEpubFile(file) {
 }
 
 // 3. PDF PARSING (via Mozilla PDF.js)
-async function parsePdfFile(file) {
+async function parsePdfFile(file, options = {}) {
   if (!window.pdfjsLib) {
     setDropzoneLoading(false);
     showToast('❌ PDF.js library not loaded. Cannot parse PDF.');
@@ -556,6 +558,7 @@ async function parsePdfFile(file) {
 
   const reader = new FileReader();
   reader.onload = async function(e) {
+    let ocrWorker = null;
     try {
       setDropzoneLoading(true, 'Extracting text from PDF pages...');
       const typedArray = new Uint8Array(e.target.result);
@@ -563,6 +566,9 @@ async function parsePdfFile(file) {
       const pdf = await loadingTask.promise;
 
       let allTextLines = [];
+      let ocrPageCount = 0;
+      const forceOcr = options.forceOcr === true;
+      const ocrLanguage = DOM.pdfOcrLanguage.value || 'eng';
 
       for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
         setDropzoneLoading(true, `Reading PDF page ${pageNum} of ${pdf.numPages}...`);
@@ -584,34 +590,87 @@ async function parsePdfFile(file) {
         // Sort lines top to bottom (higher Y in PDF coordinates means higher on page)
         const sortedYs = Array.from(linesMap.keys()).sort((a, b) => b - a);
 
+        const nativeLines = [];
         sortedYs.forEach(y => {
           const itemsOnLine = linesMap.get(y);
           // Sort items left to right
           itemsOnLine.sort((a, b) => a.transform[4] - b.transform[4]);
           const lineStr = itemsOnLine.map(it => it.str).join(' ').trim();
           if (lineStr.length > 0) {
-            allTextLines.push(lineStr);
+            nativeLines.push(lineStr);
           }
         });
+
+        const nativeTextLength = nativeLines.join(' ').replace(/\s/g, '').length;
+        const shouldOcrPage = forceOcr || nativeTextLength < 40;
+
+        if (shouldOcrPage) {
+          if (!window.Tesseract || typeof Tesseract.createWorker !== 'function') {
+            throw new Error('OCR library did not load. Check your internet connection and reload the page; scanned pages cannot be read without it.');
+          }
+
+          if (!ocrWorker) {
+            setDropzoneLoading(true, `Preparing ${ocrLanguage} OCR…`);
+            ocrWorker = await Tesseract.createWorker(ocrLanguage);
+          }
+
+          setDropzoneLoading(true, `OCR page ${pageNum} of ${pdf.numPages}…`);
+          const viewport = page.getViewport({ scale: 2.5 });
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.ceil(viewport.width);
+          canvas.height = Math.ceil(viewport.height);
+          const canvasContext = canvas.getContext('2d', { alpha: false });
+          if (!canvasContext) throw new Error(`Could not render PDF page ${pageNum} for OCR.`);
+
+          try {
+            await page.render({ canvasContext, viewport, background: 'rgb(255, 255, 255)' }).promise;
+            const result = await ocrWorker.recognize(canvas);
+            const ocrLines = (result.data.text || '')
+              .split(/\r?\n/)
+              .map(line => line.trim())
+              .filter(Boolean);
+
+            // Keep embedded text when OCR returns nothing, so sparse title pages are not lost.
+            allTextLines.push(...(ocrLines.length > 0 ? ocrLines : nativeLines));
+            ocrPageCount++;
+          } finally {
+            canvas.width = 0;
+            canvas.height = 0;
+          }
+        } else {
+          allTextLines.push(...nativeLines);
+        }
+
+        // Keep page boundaries so the last line of a page is not joined to the next page.
+        allTextLines.push('');
+        page.cleanup();
       }
 
       // Merge extracted PDF lines into complete, multi-line paragraphs
       const paragraphs = [];
       let currentParaLines = [];
 
+      const flushParagraph = () => {
+        if (currentParaLines.length > 0) {
+          paragraphs.push(currentParaLines.join(' ').replace(/\s{2,}/g, ' ').trim());
+          currentParaLines = [];
+        }
+      };
+
       allTextLines.forEach(line => {
+        if (!line.trim()) {
+          flushParagraph();
+          return;
+        }
         currentParaLines.push(line);
         // Paragraph boundary: line ends with terminal punctuation (. ! ?) and accumulated length is substantial
         const accumulated = currentParaLines.join(' ');
         if (line.match(/[.!?]["”']?$/) && accumulated.length > 150) {
-          paragraphs.push(accumulated.replace(/\s{2,}/g, ' ').trim());
-          currentParaLines = [];
+          flushParagraph();
         }
       });
 
-      if (currentParaLines.length > 0) {
-        paragraphs.push(currentParaLines.join(' ').replace(/\s{2,}/g, ' ').trim());
-      }
+      flushParagraph();
 
       if (paragraphs.length === 0) {
         throw new Error('No readable text found in PDF (file might be scanned images).');
@@ -628,10 +687,21 @@ async function parsePdfFile(file) {
       addBook(book);
       setDropzoneLoading(false);
       openBook(book.id);
+      if (ocrPageCount > 0) {
+        showToast(`OCR processed ${ocrPageCount} page${ocrPageCount === 1 ? '' : 's'}. Compare the text with your PDF for missed or misread words.`, 7000);
+      }
     } catch (err) {
       console.error(err);
       setDropzoneLoading(false);
       showToast('❌ Failed to parse PDF: ' + err.message);
+    } finally {
+      if (ocrWorker) {
+        try {
+          await ocrWorker.terminate();
+        } catch (terminateError) {
+          console.warn('Could not stop OCR worker cleanly:', terminateError);
+        }
+      }
     }
   };
   reader.onerror = function() {
