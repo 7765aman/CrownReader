@@ -15,6 +15,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <!-- JSZip CDN for EPUB archive parsing -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <!-- Tesseract.js for in-browser OCR of scanned PDF pages -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.min.js"></script>
 
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -82,6 +84,20 @@
             <div class="spinner"></div>
             <p id="parsingStatusText">Parsing book paragraphs...</p>
           </div>
+        </div>
+
+        <div class="pdf-ocr-options" aria-label="PDF OCR options">
+          <label class="pdf-ocr-toggle" for="forcePdfOcr">
+            <input type="checkbox" id="forcePdfOcr" />
+            <span>OCR every PDF page</span>
+          </label>
+          <label class="pdf-ocr-language-label" for="pdfOcrLanguage">OCR language</label>
+          <select id="pdfOcrLanguage" class="pdf-ocr-language">
+            <option value="eng">English</option>
+            <option value="hin">Hindi</option>
+            <option value="eng+hin">English + Hindi</option>
+          </select>
+          <p class="pdf-ocr-help">Scanned or sparse-text pages are OCRed automatically. “OCR every page” replaces embedded text with OCR and is slower; check the result against the PDF.</p>
         </div>
 
         <!-- BOOKS SECTION -->
